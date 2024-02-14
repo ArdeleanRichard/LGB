@@ -3,23 +3,26 @@ Linde-Buzo-Gray / Generalized Lloyd algorithm implementation in Python 3.
 """
 import numpy as np
 
-_size_data = 0
-_dim = 0
-
+LABEL_COLOR_MAP = {-1: 'white',
+                   0: 'gray',
+                   1: 'red',
+                   2: 'blue',
+                   3: 'green',
+                   4: 'black',
+                   5: 'yellow',
+                   6: 'cyan',
+                   7: 'magenta',
+                   8: 'tab:purple',
+                   }
 
 def generate_codebook(data, size_codebook, epsilon=0.00001):
     """
     :param data: input data with N d-dimensional vectors
-    :param size_codebook: codebook size 
+    :param size_codebook: codebook size
     :param epsilon: convergence value
     """
-    global _size_data, _dim
-
     _size_data = len(data)
-    assert _size_data > 0
-
     _dim = len(data[0])
-    assert _dim > 0
 
     data = np.array(data)
     # calculate initial codevector: average vector of whole input data
@@ -36,9 +39,9 @@ def generate_codebook(data, size_codebook, epsilon=0.00001):
 
     # split codevectors until we have have enough
     while len(codebook) < size_codebook:
-        codebook, codebook_abs_weights, codebook_rel_weights, avg_dist = split_codebook(data, codebook, epsilon, avg_dist)
+        codebook, labels, codebook_abs_weights, codebook_rel_weights, avg_dist = split_codebook(data, codebook, epsilon, avg_dist)
 
-    return codebook, codebook_abs_weights, codebook_rel_weights
+    return codebook, labels, codebook_abs_weights, codebook_rel_weights
 
 
 def split_codebook(data, codebook, epsilon, initial_avg_dist):
@@ -50,6 +53,8 @@ def split_codebook(data, codebook, epsilon, initial_avg_dist):
     :param initial_avg_dist: initial average distortion
     :return Tuple with new codebook, codebook absolute weights and codebook relative weights
     """
+    _size_data = len(data)
+    _dim = len(data[0])
 
     # split codevectors
     codebook1 = codebook * (1.0 + epsilon)
@@ -89,8 +94,6 @@ def split_codebook(data, codebook, epsilon, initial_avg_dist):
             abs_weights[i_c] = len(vecs)
             rel_weights[i_c] = len(vecs) / _size_data
 
-
-
         # recalculate average distortion value
         prev_avg_dist = avg_dist if avg_dist > 0 else initial_avg_dist
         closest_c_list = np.array(closest_c_list)
@@ -102,15 +105,15 @@ def split_codebook(data, codebook, epsilon, initial_avg_dist):
 
         num_iter += 1
 
-    return codebook, abs_weights, rel_weights, avg_dist
+    return codebook, new_indexes, abs_weights, rel_weights, avg_dist
 
 
 
 
 def lgb_simple_example():
+    import time
     import random
     import matplotlib.pyplot as plt
-    import time
 
     NUM_AREAS = SIZE_CODEBOOK = 8
     NUM_DIMS = 2
@@ -136,31 +139,36 @@ def lgb_simple_example():
     population = np.array(population)
     print(f"Population shape: {population.shape}")
 
-    # display random centroids as orange circles
-    plt.scatter(area_centroids[:, 0], area_centroids[:, 1], marker='o', color='orange')
-
+    plt.title("Generated data")
     # display the population as blue crosses
     plt.scatter(population[:, 0], population[:, 1], marker='x', color='blue')
+    # display random centroids as orange circles
+    plt.scatter(area_centroids[:, 0], area_centroids[:, 1], marker='o', color='orange', label='Generated Centroids')
+    plt.legend()
+    plt.show()
 
     # generate codebook
     start = time.time()
-    cb, cb_abs_w, cb_rel_w = generate_codebook(population, SIZE_CODEBOOK)
+    cb, labels, cb_abs_w, cb_rel_w = generate_codebook(population, SIZE_CODEBOOK)
     print(f'LGB took {time.time() - start:.3f}s')
 
-    # display codebook as red filled circles
-    # codevectors with higher weight (more points near them) get bigger radius
-    plt.scatter(cb[:, 0], cb[:, 1], s=[((w + 1) ** 5) * 40 for w in cb_rel_w], marker='o', color='red')
+    label_color = [LABEL_COLOR_MAP[l] for l in labels]
 
+    plt.title("Labelled data")
+    plt.scatter(population[:, 0], population[:, 1], marker='x', color=label_color)
+
+    plt.scatter(cb[:, 0], cb[:, 1], s=[((w + 1) ** 5) * 40 for w in cb_rel_w], marker='o', color='red', label='Found Centroids')
+    plt.legend()
     plt.show()
 
 
 def lgb_complex_example():
+    import time
     import random
     import matplotlib.pyplot as plt
     from sklearn.decomposition import PCA
-    import time
 
-    NUM_AREAS = SIZE_CODEBOOK = 20
+    NUM_AREAS = SIZE_CODEBOOK = 8
     NUM_DIMS = 5
     NUM_POINTS_PER_AREA = 1000
     AREA_MIN_MAX = (-20, 20)
@@ -185,24 +193,30 @@ def lgb_complex_example():
 
     pca_ = PCA(n_components=2)
     population_pca = pca_.fit_transform(population)
+    area_centroids_pca = pca_.transform(area_centroids)
 
+    plt.title("Generated data")
     # display the population as blue crosses
     plt.scatter(population_pca[:, 0], population_pca[:, 1], marker='x', color='blue')
+    # display random centroids as orange circles
+    plt.scatter(area_centroids_pca[:, 0], area_centroids_pca[:, 1], marker='o', color='orange', label='Generated Centroids')
+    plt.legend()
+    plt.show()
 
     # generate codebook
     start = time.time()
-    cb, cb_abs_w, cb_rel_w = generate_codebook(population, SIZE_CODEBOOK)
+    cb, labels, cb_abs_w, cb_rel_w = generate_codebook(population, SIZE_CODEBOOK)
     print(f'LGB took {time.time() - start:.3f}s')
 
+    label_color = [LABEL_COLOR_MAP[l] for l in labels]
     cb_pca = pca_.transform(cb)
 
-    # display codebook as red filled circles
-    # codevectors with higher weight (more points near them) get bigger radius
-    plt.scatter(cb_pca[:, 0], cb_pca[:, 1], s=[((w + 1) ** 5) * 40 for w in cb_rel_w], marker='o', color='red')
+    plt.title("Labelled data")
+    plt.scatter(population_pca[:, 0], population_pca[:, 1], marker='x', color=label_color)
 
+    plt.scatter(cb_pca[:, 0], cb_pca[:, 1], s=[((w + 1) ** 5) * 40 for w in cb_rel_w], marker='o', color='red', label='Found Centroids')
+    plt.legend()
     plt.show()
-
-
 
 
 if __name__ == '__main__':
